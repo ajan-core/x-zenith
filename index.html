@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NEXUS-ZERO | Digital Command Center</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="banner">
+      <h1>NEXUS-ZERO <span>| THE DIGITAL COMMAND CENTER</span></h1>
+    </header>
+
+    <section class="console-frame">
+      <div class="topline">
+        <span>NEXUS-ZERO | The OS Matrix</span>
+        <span>[OS: ACTIVE] [USER: CORE_USER] [SYSTEM INTEGRITY: 100%]</span>
+      </div>
+
+      <div class="workspace">
+        <aside class="controls">
+          <button id="uploadPortal" class="panel-btn">[VIDEO UPLOAD PORTAL]<br><small>- Drag Here</small></button>
+          <button class="panel-btn">[AI APP BUILDER]<br><small>- Code Prompt Area</small></button>
+          <button id="directDownload" class="panel-btn">[DIRECT DOWNLOAD]<br><small>- Hash Input</small></button>
+          <div class="panel-note">[AI CO-PILOT STATUS]: IDLE | Waiting for query...</div>
+          <input id="hiddenUpload" type="file" accept="video/*" hidden />
+        </aside>
+
+        <section class="matrix-panel">
+          <div class="matrix-header">THE MATRIX</div>
+          <div id="hexGrid" class="hex-grid" aria-label="Interactive media grid"></div>
+        </section>
+
+        <aside class="viewport-panel">
+          <div class="viewport-label">VIEWPORT</div>
+          <video id="viewportVideo" controls preload="metadata" playsinline></video>
+          <div id="videoMeta" class="meta">[FRAGMENT]: READY</div>
+        </aside>
+      </div>
+
+      <section class="terminal" id="terminal">
+        <div>› Initializing Collective Consciousness Protocol...</div>
+        <div>› Synchronizing data with user thread CORE_USER...</div>
+        <div>› [ADMIN_01] Analyzing video content for optimized editing...</div>
+        <div>› Zero-Cost Hosting confirmed...</div>
+        <div id="progressWrap" class="progress-wrap hidden">
+          <div class="progress-title">UPLOAD STREAM</div>
+          <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+          <div id="progressText">0%</div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
