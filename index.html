@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NEXUS-ZERO | Digital Command Center</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --abyss: #000000;
+      --cyan: #00ffff;
+      --amber: #ffbf00;
+      --white: #ffffff;
+      --glass: rgba(8, 25, 25, 0.36);
+      --grid-line: rgba(0, 255, 255, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+      font-family: "JetBrains Mono", "Consolas", "Menlo", monospace;
+      background: var(--abyss);
+      color: var(--white);
+    }
+
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(0, 255, 255, 0.05), transparent 45%),
+        radial-gradient(circle at 80% 60%, rgba(0, 255, 255, 0.04), transparent 50%),
+        linear-gradient(120deg, rgba(0, 255, 255, 0.03), rgba(0, 0, 0, 0.85));
+      z-index: -3;
+    }
+
+    #networkCanvas {
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      opacity: 0.7;
+      filter: blur(0.2px);
+    }
+
+    .viewport {
+      backdrop-filter: blur(14px);
+      background: var(--glass);
+      border: 1px solid rgba(0, 255, 255, 0.45);
+      box-shadow:
+        0 0 40px rgba(0, 255, 255, 0.09),
+        inset 0 0 20px rgba(0, 255, 255, 0.08);
+    }
+
+    .status-pill {
+      border: 1px solid rgba(0, 255, 255, 0.35);
+      box-shadow: inset 0 0 8px rgba(0, 255, 255, 0.15);
+    }
+
+    .hex-grid {
+      transform: perspective(1000px) rotateX(18deg) rotateZ(-7deg);
+      transform-style: preserve-3d;
+    }
+
+    .hex-tile {
+      position: relative;
+      width: 102px;
+      height: 114px;
+      clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0 50%);
+      background: linear-gradient(145deg, rgba(0, 255, 255, 0.2), rgba(0, 0, 0, 0.82));
+      border: 1px solid rgba(0, 255, 255, 0.3);
+      transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+      cursor: pointer;
+      overflow: hidden;
+    }
+
+    .hex-tile::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.04),
+        rgba(255, 255, 255, 0.04) 2px,
+        transparent 2px,
+        transparent 4px
+      );
+      opacity: .45;
+      pointer-events: none;
+    }
+
+    .hex-tile:hover {
+      transform: translateY(-7px) rotateX(-8deg) rotateY(5deg) scale(1.04);
+      border-color: rgba(0, 255, 255, 0.9);
+      box-shadow: 0 0 18px rgba(0, 255, 255, .28);
+    }
+
+    .hex-meta {
+      position: absolute;
+      inset: 0;
+      padding: 0.5rem;
+      font-size: .55rem;
+      line-height: 1.2;
+      color: var(--cyan);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      gap: .2rem;
+      opacity: 0;
+      transition: opacity .2s ease;
+      background: linear-gradient(to top, rgba(0, 0, 0, .75), transparent 40%);
+    }
+
+    .hex-tile:hover .hex-meta,
+    .hex-tile.active .hex-meta { opacity: 1; }
+
+    .scanlines::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        180deg,
+        rgba(255,255,255,.06),
+        rgba(255,255,255,.06) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+      mix-blend-mode: screen;
+      opacity: .18;
+      animation: scan 7s linear infinite;
+    }
+
+    @keyframes scan {
+      from { transform: translateY(0); }
+      to { transform: translateY(60px); }
+    }
+
+    .terminal {
+      background: linear-gradient(180deg, rgba(0, 0, 0, .95), rgba(0, 35, 35, .65));
+      border-top: 1px solid rgba(0,255,255,.35);
+    }
+
+    .log-line {
+      white-space: nowrap;
+      overflow: hidden;
+      width: 0;
+      animation: typing 2.5s steps(65, end) forwards;
+      color: #dff;
+      text-shadow: 0 0 8px rgba(0,255,255,.28);
+    }
+
+    @keyframes typing {
+      from { width: 0; }
+      to { width: 100%; }
+    }
+
+    .sidebar-card {
+      border: 1px solid rgba(0,255,255,.35);
+      background: rgba(0, 18, 20, .52);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 0 12px rgba(0,255,255,.18);
+    }
+
+    .drop-zone.dragover {
+      border-color: var(--amber);
+      box-shadow: 0 0 20px rgba(255,191,0,.25);
+      background: rgba(255,191,0,.08);
+    }
+
+    .neon-btn {
+      border: 1px solid rgba(0,255,255,.65);
+      box-shadow: 0 0 22px rgba(0,255,255,.2), inset 0 0 14px rgba(0,255,255,.1);
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+
+    .neon-btn:hover {
+      transform: translateY(-2px) scale(1.01);
+      box-shadow: 0 0 30px rgba(0,255,255,.35), inset 0 0 14px rgba(0,255,255,.2);
+    }
+
+    .hash-badge {
+      border: 1px solid rgba(255,191,0,.65);
+      color: var(--amber);
+      box-shadow: inset 0 0 8px rgba(255,191,0,.22);
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-bg"></div>
+  <canvas id="networkCanvas" aria-hidden="true"></canvas>
+
+  <div class="relative h-screen w-screen p-3 md:p-6 flex flex-col gap-3 md:gap-4">
+    <header class="viewport rounded-xl p-3 md:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <svg width="44" height="44" viewBox="0 0 100 100" class="drop-shadow-[0_0_10px_rgba(0,255,255,0.7)]" aria-label="Nexus Zero logo">
+          <path d="M10 80V20L40 65V20L90 80V20" stroke="#00ffff" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M15 82H85" stroke="#00ffff" stroke-width="5" opacity="0.6"/>
+        </svg>
+        <div>
+          <h1 class="text-cyan-300 font-semibold tracking-[0.25em] text-xs md:text-sm">NEXUS-ZERO | DIGITAL COMMAND CENTER</h1>
+          <p class="text-[10px] md:text-xs text-cyan-100/75">Decentralized Zero-Cost Video Mesh OS</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px]">
+        <div class="status-pill rounded px-2 py-1">⚡ [OS: ACTIVE]</div>
+        <div class="status-pill rounded px-2 py-1">🛡 [ADMIN: AUTHORIZED]</div>
+        <div class="status-pill rounded px-2 py-1">🧬 [INTEGRITY: 100%]</div>
+        <div class="status-pill rounded px-2 py-1">🧵 [ACTIVE THREADS: 1.2M]</div>
+      </div>
+    </header>
+
+    <main class="flex-1 min-h-0 flex gap-3 md:gap-4">
+      <aside class="w-[270px] max-w-[40vw] hidden lg:flex flex-col gap-3">
+        <section class="sidebar-card rounded-lg p-3">
+          <h2 class="text-cyan-300 text-xs tracking-widest mb-2">[UPLOAD PORTAL]</h2>
+          <div id="dropZone" class="drop-zone border border-cyan-400/40 rounded-lg p-4 text-xs text-cyan-100/90 min-h-28 flex items-center justify-center text-center">
+            Drag & Drop fragment here
+          </div>
+          <div id="uploadStatus" class="mt-2 text-[11px] text-cyan-100/80 h-16 overflow-auto"></div>
+        </section>
+
+        <section class="sidebar-card rounded-lg p-3">
+          <h2 class="text-cyan-300 text-xs tracking-widest mb-2">[AI APP BUILDER]</h2>
+          <textarea id="aiPrompt" class="w-full bg-black/50 border border-cyan-400/35 rounded p-2 text-xs h-20 resize-none" placeholder="Build a chat module"></textarea>
+          <button id="aiBuildBtn" class="mt-2 w-full neon-btn rounded p-2 text-xs text-cyan-200">EXECUTE AI BUILD</button>
+          <div id="aiOutput" class="mt-2 text-[11px] text-cyan-100/85 min-h-12"></div>
+        </section>
+
+        <section class="sidebar-card rounded-lg p-3">
+          <h2 class="text-cyan-300 text-xs tracking-widest mb-2">[DIRECT DOWNLOAD]</h2>
+          <input id="hashInput" type="text" placeholder="Hash Input" class="w-full bg-black/50 border border-cyan-400/35 rounded p-2 text-xs" />
+          <div id="hashEcho" class="mt-2 text-[11px] text-amber-300/90"></div>
+        </section>
+      </aside>
+
+      <section class="viewport rounded-xl p-3 md:p-4 flex-1 min-h-0 flex flex-col gap-3 relative overflow-hidden">
+        <div class="flex justify-between items-center">
+          <h2 class="text-cyan-300 tracking-[0.2em] text-xs md:text-sm">THE VIEWPORT :: DATA MATRIX</h2>
+          <span class="hash-badge text-[10px] rounded px-2 py-1">ALLOCATION: DISTRIBUTED</span>
+        </div>
+
+        <div id="matrixGrid" class="hex-grid flex flex-wrap gap-2 md:gap-3 justify-center py-2 md:py-4 overflow-y-auto pr-2"></div>
+
+        <div id="activeFragment" class="absolute inset-0 bg-black/75 backdrop-blur-sm hidden items-center justify-center p-3 md:p-8">
+          <div class="relative w-full max-w-3xl rounded-xl border border-cyan-300/50 bg-black/80 p-3 md:p-5 scanlines shadow-[0_0_35px_rgba(0,255,255,0.22)]">
+            <button id="closeFragment" class="absolute top-2 right-2 text-xs text-cyan-200">[X CLOSE]</button>
+            <h3 id="fragmentTitle" class="text-cyan-300 text-sm tracking-widest mb-2">ACTIVE FRAGMENT</h3>
+            <div class="relative rounded-lg overflow-hidden border border-cyan-400/40">
+              <video id="videoPlayer" class="w-full aspect-video bg-black" controls muted autoplay loop>
+                <source src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4">
+              </video>
+              <div class="absolute top-2 left-2 text-[10px] bg-black/55 px-2 py-1 border border-cyan-300/40">SIGNAL LOCKED • QUANTUM CACHE</div>
+            </div>
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mt-3">
+              <div id="downloadLog" class="text-xs text-cyan-100/85 min-h-10">Awaiting download command...</div>
+              <button id="downloadBtn" class="neon-btn text-cyan-100 bg-cyan-400/10 rounded-md px-4 py-2 text-sm tracking-wider">[ENGAGE DOWNLOAD]</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="terminal rounded-lg p-2 md:p-3 h-32 md:h-36 overflow-hidden">
+      <h2 class="text-[10px] md:text-xs text-cyan-300 tracking-[0.2em] mb-1">FLOW TERMINAL</h2>
+      <div id="terminalLog" class="space-y-1 text-[11px] md:text-xs"></div>
+    </footer>
+  </div>
+
+  <script>
+    const matrixGrid = document.getElementById('matrixGrid');
+    const activeFragment = document.getElementById('activeFragment');
+    const closeFragment = document.getElementById('closeFragment');
+    const fragmentTitle = document.getElementById('fragmentTitle');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const downloadLog = document.getElementById('downloadLog');
+    const terminalLog = document.getElementById('terminalLog');
+    const aiPrompt = document.getElementById('aiPrompt');
+    const aiBuildBtn = document.getElementById('aiBuildBtn');
+    const aiOutput = document.getElementById('aiOutput');
+    const dropZone = document.getElementById('dropZone');
+    const uploadStatus = document.getElementById('uploadStatus');
+    const hashInput = document.getElementById('hashInput');
+    const hashEcho = document.getElementById('hashEcho');
+
+    const fragments = Array.from({ length: 24 }, (_, i) => ({
+      id: `${(10 + i).toString(16).toUpperCase()}A`,
+      access: i % 3 === 0 ? 'OPEN' : i % 2 ? 'SHARED' : 'MIRRORED',
+      mood: ['POETIC', 'ANALYTIC', 'AURORA', 'SYNTHWAVE'][i % 4]
+    }));
+
+    function buildMatrix() {
+      fragments.forEach(fragment => {
+        const tile = document.createElement('button');
+        tile.className = 'hex-tile';
+        tile.innerHTML = `
+          <div class="hex-meta">
+            <span>[FRAGMENT_ID: ${fragment.id}]</span>
+            <span>[ACCESS: ${fragment.access}]</span>
+            <span>[AI MOOD: ${fragment.mood}]</span>
+          </div>`;
+        tile.addEventListener('click', () => openFragment(tile, fragment));
+        matrixGrid.appendChild(tile);
+      });
+    }
+
+    function openFragment(tile, fragment) {
+      document.querySelectorAll('.hex-tile').forEach(t => t.classList.remove('active'));
+      tile.classList.add('active');
+      fragmentTitle.textContent = `ACTIVE FRAGMENT :: ${fragment.id}`;
+      downloadLog.textContent = `Ready to download fragment ${fragment.id}. Awaiting integrity check.`;
+      activeFragment.classList.remove('hidden');
+      activeFragment.classList.add('flex');
+    }
+
+    closeFragment.addEventListener('click', () => {
+      activeFragment.classList.add('hidden');
+      activeFragment.classList.remove('flex');
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      const phases = [
+        'Establishing decentralized peers...',
+        'Collecting segment shards...',
+        'Validating SHA-256 hash 98af..e10c...',
+        'Hash consensus reached across 32 nodes.',
+        'Download complete. File integrity: VERIFIED.'
+      ];
+      downloadLog.innerHTML = '';
+      phases.forEach((phase, index) => {
+        setTimeout(() => {
+          const line = document.createElement('div');
+          line.textContent = `> ${phase}`;
+          line.className = index === phases.length - 1 ? 'text-amber-300' : '';
+          downloadLog.appendChild(line);
+        }, index * 850);
+      });
+    });
+
+    aiBuildBtn.addEventListener('click', () => {
+      const prompt = aiPrompt.value.trim();
+      if (!prompt) {
+        aiOutput.textContent = 'Awaiting instruction payload...';
+        return;
+      }
+      aiOutput.textContent = 'AI Co-Pilot: Parsing objective...';
+      setTimeout(() => {
+        aiOutput.textContent = `AI Co-Pilot: Compiling ${prompt.toLowerCase()} structure... Zero-cost deployment active.`;
+      }, 900);
+    });
+
+    hashInput.addEventListener('input', () => {
+      const value = hashInput.value.trim();
+      hashEcho.textContent = value ? `Hash routed to retrieval queue: ${value.slice(0, 22)}${value.length > 22 ? '...' : ''}` : '';
+    });
+
+    ;['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, e => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    }));
+
+    ;['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+    }));
+
+    dropZone.addEventListener('drop', e => {
+      const file = e.dataTransfer.files?.[0];
+      if (!file) return;
+      uploadStatus.innerHTML = '';
+      const steps = [
+        `> Ingesting ${file.name} (${Math.ceil(file.size / 1024)} KB)...`,
+        '> Scanning packet signatures...',
+        '> Encrypting stream with lattice key...',
+        '> Fragmenting & distributing to peers...',
+        '> Upload complete: decentralized mirror active.'
+      ];
+      steps.forEach((step, idx) => {
+        setTimeout(() => {
+          const line = document.createElement('div');
+          line.textContent = step;
+          line.className = idx === steps.length - 1 ? 'text-amber-300' : 'text-cyan-100/85';
+          uploadStatus.appendChild(line);
+          uploadStatus.scrollTop = uploadStatus.scrollHeight;
+        }, idx * 650);
+      });
+    });
+
+    const logs = [
+      'Initiating Collective Consciousness Protocol...',
+      'Fragmenting video fragment 456...',
+      '[AI] Analyzing content for optimized rendering...',
+      'Synchronizing with User Ali Jaan...',
+      'Cross-node latency stable at 4.1ms.',
+      'Swarm consensus reaffirmed.'
+    ];
+
+    let logIndex = 0;
+    function pushLog() {
+      const line = document.createElement('div');
+      line.className = 'log-line';
+      line.textContent = `> ${logs[logIndex % logs.length]}`;
+      terminalLog.appendChild(line);
+      while (terminalLog.children.length > 6) terminalLog.removeChild(terminalLog.firstChild);
+      logIndex++;
+    }
+    setInterval(pushLog, 1700);
+    pushLog();
+
+    // Animated network canvas
+    const canvas = document.getElementById('networkCanvas');
+    const ctx = canvas.getContext('2d');
+    let width, height, points;
+
+    function resizeCanvas() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+      points = Array.from({ length: Math.min(140, Math.floor(width / 10)) }, () => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.22,
+        vy: (Math.random() - 0.5) * 0.22
+      }));
+    }
+
+    function renderNetwork(time = 0) {
+      ctx.clearRect(0, 0, width, height);
+      const pulse = 0.35 + Math.sin(time * 0.00045) * 0.2;
+
+      for (const p of points) {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0 || p.x > width) p.vx *= -1;
+        if (p.y < 0 || p.y > height) p.vy *= -1;
+
+        ctx.fillStyle = `rgba(0,255,255,${0.45 + pulse})`;
+        ctx.fillRect(p.x, p.y, 1.4, 1.4);
+      }
+
+      for (let i = 0; i < points.length; i++) {
+        for (let j = i + 1; j < points.length; j++) {
+          const a = points[i], b = points[j];
+          const dx = a.x - b.x;
+          const dy = a.y - b.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < 125) {
+            const alpha = (1 - dist / 125) * (0.1 + pulse * 0.3);
+            ctx.strokeStyle = `rgba(0,255,255,${alpha})`;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+        }
+      }
+
+      requestAnimationFrame(renderNetwork);
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+
+    buildMatrix();
+    resizeCanvas();
+    renderNetwork();
+  </script>
+</body>
+</html>
